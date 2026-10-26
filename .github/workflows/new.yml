@@ -9,7 +9,7 @@ jobs:
   test:
     name: ${{ matrix.fix && 'with fix' || 'without fix (expected to FAIL)' }}
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -17,8 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-          submodules: false # bootstrap fetches the few it needs
+          fetch-depth: 0 # bootstrap uses git history to find upstream CI artifacts
+          submodules: false # bootstrap fetches the ones it needs
 
       - name: Revert path.rs to upstream (without-fix run only)
         if: ${{ !matrix.fix }}
@@ -29,4 +29,8 @@ jobs:
 
       - name: Run the new tests
         shell: bash
-        run: python x.py test library/std --stage 0 --no-doc --test-args components_eq
+        run: |
+          python x.py test library/std --stage 1 --tests --test-args components_eq
+          # Optional speedup if the plain run takes too long (needs full history):
+          # python x.py test library/std --stage 1 --tests \
+          #   --set rust.download-rustc=if-unchanged --test-args components_eq
