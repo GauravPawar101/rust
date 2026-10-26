@@ -17,20 +17,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # bootstrap uses git history to find upstream CI artifacts
+          fetch-depth: 0 # bootstrap looks for the latest upstream bors commit in history
           submodules: false # bootstrap fetches the ones it needs
 
-      - name: Revert path.rs to upstream (without-fix run only)
+      - name: Show which upstream commit bootstrap will use for CI artifacts
+        shell: bash
+        run: |
+          git rev-list --author-date-order --author='bors@rust-lang.org' -n1 HEAD
+          git log -1 --format='%H %an %ad %s' "$(git rev-list --author-date-order --author='bors@rust-lang.org' -n1 HEAD)"
+
+      - name: Revert path.rs to its pre-fix version (without-fix run only)
         if: ${{ !matrix.fix }}
         shell: bash
         run: |
-          git fetch --no-tags --depth=1 https://github.com/rust-lang/rust.git main
-          git checkout FETCH_HEAD -- library/std/src/path.rs
+          git fetch --no-tags https://github.com/rust-lang/rust.git main
+          base=$(git merge-base HEAD FETCH_HEAD)
+          echo "merge-base with upstream main: $base"
+          git checkout "$base" -- library/std/src/path.rs
+          git --no-pager diff --stat HEAD -- library/std/src/path.rs
 
+      # `--ci false`: without it bootstrap assumes HEAD^1 is an upstream bors commit
+      # (true for rust-lang/rust's own CI, not for a plain push) and tries to download
+      # LLVM for that SHA, which 404s.
       - name: Run the new tests
         shell: bash
-        run: |
-          python x.py test library/std --stage 1 --tests --test-args components_eq
-          # Optional speedup if the plain run takes too long (needs full history):
-          # python x.py test library/std --stage 1 --tests \
-          #   --set rust.download-rustc=if-unchanged --test-args components_eq
+        run: python x.py test library/std --stage 1 --tests --ci false --test-args components_eq
