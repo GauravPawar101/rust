@@ -1,0 +1,32 @@
+name: windows-path-test
+
+on:
+  push:
+    branches: [ci-windows-test]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.fix && 'with fix' || 'without fix (expected to FAIL)' }}
+    runs-on: windows-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        fix: [true, false]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          submodules: false # bootstrap fetches the few it needs
+
+      - name: Revert path.rs to upstream (without-fix run only)
+        if: ${{ !matrix.fix }}
+        shell: bash
+        run: |
+          git fetch --no-tags --depth=1 https://github.com/rust-lang/rust.git main
+          git checkout FETCH_HEAD -- library/std/src/path.rs
+
+      - name: Run the new tests
+        shell: bash
+        run: python x.py test library/std --stage 0 --no-doc --test-args components_eq
